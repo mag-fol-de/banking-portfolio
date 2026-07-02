@@ -14,6 +14,13 @@ regression, intercept calibration to long-run-average PD, mapped to a
 9-grade master scale. Validated across ten origination vintages
 spanning five years with an out-of-time backtest.
 
+**[02-seb-pd-case](./02-seb-pd-case)**
+Full retail PD pipeline built for a recruitment case exercise. IV
+screening, iterative VIF removal, forward stepwise selection with a
+combined Gini + Brier criterion, WoE encoding, and comparison across
+logistic regression, XGBoost, and LightGBM. Out-of-time Gini around
+0.89 on the case dataset. Case data not included.
+
 ## Stack
 
 - Python for pipelines and post-processing
