@@ -14,7 +14,7 @@ regression, intercept calibration to long-run-average PD, mapped to a
 9-grade master scale. Validated across ten origination vintages
 spanning five years with an out-of-time backtest.
 
-**[02-seb-pd-case](./02-seb-pd-case)**
+**[02-pd-model](./02-pd-model)**
 Full retail PD pipeline built for a recruitment case exercise. IV
 screening, iterative VIF removal, forward stepwise selection with a
 combined Gini + Brier criterion, WoE encoding, and comparison across

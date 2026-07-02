@@ -1,4 +1,4 @@
-# SEB PD Case Study
+# PD Model Case Study
 
 Full retail Probability of Default modelling pipeline built for a
 recruitment case exercise. The input dataset (`case_data.csv`) was
