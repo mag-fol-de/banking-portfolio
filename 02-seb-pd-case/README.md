@@ -28,7 +28,7 @@ signal-to-noise) lands at Gini 0.54.
 ## Files
 
 - `pd_model.py` --- full pipeline from load to model comparison
-- `pd_model_report.tex` --- report source
+- `report.pdf` --- final report
 - `figures/` --- generated plots
 
 ## Note on running
