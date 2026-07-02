@@ -1,0 +1,64 @@
+{
+  "train": {
+    "auc": 0.7778284058608209,
+    "gini": 0.5556568117216418,
+    "ks": 0.4126417330371664,
+    "log_loss": 0.29153286865873074,
+    "brier": 0.08456280969249455,
+    "ap": 0.3422018627872282
+  },
+  "val": {
+    "auc": 0.7698630385185368,
+    "gini": 0.5397260770370735,
+    "ks": 0.4037713332606525,
+    "log_loss": 0.32103566430354613,
+    "brier": 0.09505685603937425,
+    "ap": 0.3449123995710312
+  },
+  "oot": {
+    "auc": 0.7692946042714239,
+    "gini": 0.5385892085428479,
+    "ks": 0.3991432218018342,
+    "log_loss": 0.34922759563260936,
+    "brier": 0.10475041969971506,
+    "ap": 0.39028482098358486
+  },
+  "psi_train_val": 0.0002712053061180486,
+  "psi_train_oot": 7.376673449789352e-05,
+  "base_rate_train": 0.10925333333333333,
+  "base_rate_val": 0.12364,
+  "base_rate_oot": 0.14008,
+  "calib_offset": -0.0002794837208066614,
+  "n_features_kept": 10,
+  "n_features_dropped": 16,
+  "kept_features": [
+    "bureau_score",
+    "interest_rate_pct",
+    "utilization_pct",
+    "worst_status_24m",
+    "delinquencies_2y",
+    "months_since_last_delinquency_missing",
+    "months_since_last_delinquency",
+    "prior_bankruptcies",
+    "inquiries_6m",
+    "public_records"
+  ],
+  "dropped_features": [
+    "debt_to_income_pct",
+    "employment_length_years",
+    "home_ownership",
+    "age",
+    "employment_length_years_missing",
+    "credit_history_length_years",
+    "annual_income",
+    "log_annual_income",
+    "payment_to_income",
+    "annual_income_missing",
+    "loan_to_income",
+    "loan_purpose",
+    "num_credit_lines",
+    "log_loan_amount",
+    "loan_amount",
+    "loan_term_months"
+  ]
+}

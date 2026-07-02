@@ -1,0 +1,452 @@
+\documentclass[a4paper,11pt]{article}
+
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage{geometry}
+\geometry{margin=2.2cm}
+\usepackage{xcolor}
+\usepackage{graphicx}
+\usepackage{tikz}
+\usepackage{everypage}
+\usepackage{background}
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage{booktabs}
+\usepackage{caption}
+\usepackage{float}
+\usepackage[colorlinks=true,linkcolor=blue,urlcolor=blue]{hyperref}
+
+\setlength{\parskip}{0.6em}
+\setlength{\parindent}{0pt}
+
+\definecolor{bordercolor}{RGB}{68,94,114}
+\definecolor{goodgreen}{RGB}{30,120,60}
+\definecolor{missingred}{RGB}{180,40,40}
+
+\backgroundsetup{
+  scale=0.96, color=bordercolor, opacity=0.5, angle=0,
+  position=current page.center,
+  contents={\begin{tikzpicture}[remember picture, overlay]
+    \draw[line width=4pt, color=bordercolor]
+      (current page.south west) rectangle (current page.north east);
+  \end{tikzpicture}}
+}
+
+\begin{document}
+
+\begin{titlepage}
+\thispagestyle{empty}
+\centering
+\vspace*{3cm}
+{\Huge\bfseries Probability of Default Scorecard\\\bigskip
+\LARGE WoE-Based Retail PD Prototype with Out-of-Time Backtesting
+\par}
+\vspace{1.5cm}
+{\Large Magnus Foldeström\\ June 21, 2026\par}
+\vfill
+\end{titlepage}
+
+\section{What this project does}
+
+This is a retail Probability of Default (PD) scorecard prototype built
+end-to-end on a synthetic loan portfolio. The model follows the
+methodology used by European banks for IRB scorecards: Weight-of-Evidence
+(WoE) binning, Information-Value-based feature selection, regularized
+logistic regression on WoE-encoded features, intercept calibration to
+the long-run-average default rate, mapping to a rating master scale,
+and out-of-time backtesting.
+
+It is a portfolio demonstration, not a regulator-approved model. The
+goal is to show that I can implement the structural components of an
+IRB scorecard end-to-end and reason about how they connect to Basel
+and IFRS 9 requirements. A production-grade version would need real
+bureau data, a defined default trigger, independent validation, and
+the full model governance infrastructure described in the limitations
+section.
+
+\section{Data}
+
+A synthetic portfolio of 250,000 unsecured retail loans, 25,000 per
+origination vintage across ten half-year cohorts (2019H1 through
+2023H2). The dataset spans five years, which matches the Basel minimum
+observation period for retail IRB PD estimation. Each loan has an
+18-month performance window and a realized default outcome.
+
+The data-generating process embeds a logit model where bureau
+attributes (score, prior bankruptcies, worst delinquency status,
+inquiries, utilization) are the strong predictors, application
+attributes (DTI, income, employment) are moderate predictors, and
+demographics (age, loan purpose) are weak predictors. Vintage-level
+fixed effects produce cohort-to-cohort variation in the realized
+default rate, mimicking the macroeconomic path from the pre-COVID
+benign cohorts, through the 2020 stress (masked by forbearance) and
+the 2021 recovery, and into the 2022--2023 rate-hike pressure.
+
+\begin{table}[H]
+\centering
+\begin{tabular}{l r r r}
+\toprule
+\textbf{Vintage} & \textbf{Loans} & \textbf{Defaults} & \textbf{Default rate} \\
+\midrule
+2019H1 & 25\,000 & 2\,513 & 10.05\% \\
+2019H2 & 25\,000 & 2\,556 & 10.22\% \\
+2020H1 & 25\,000 & 2\,750 & 11.00\% \\
+2020H2 & 25\,000 & 2\,939 & 11.76\% \\
+2021H1 & 25\,000 & 2\,866 & 11.46\% \\
+2021H2 & 25\,000 & 2\,764 & 11.06\% \\
+2022H1 & 25\,000 & 3\,041 & 12.16\% \\
+2022H2 & 25\,000 & 3\,141 & 12.56\% \\
+2023H1 & 25\,000 & 3\,399 & 13.60\% \\
+2023H2 & 25\,000 & 3\,605 & 14.42\% \\
+\midrule
+Total  & 250\,000 & 29\,574 & 11.83\% \\
+\bottomrule
+\end{tabular}
+\caption{Portfolio composition by origination vintage. Realized default rates trend from 10.05\% in the pre-COVID cohort to 14.42\% in the 2023H2 stress cohort.}
+\end{table}
+
+\subsection{Cohort split}
+
+The split is chronological by vintage, as is standard in IRB modelling,
+because covariate drift across cohorts is the dominant failure mode in
+production:
+
+\begin{itemize}
+\item \textbf{Training:} 2019H1 through 2021H2 (six cohorts, 150\,000 loans).
+\item \textbf{Validation:} 2022H1 + 2022H2 (two cohorts, 50\,000 loans), in-time.
+\item \textbf{Out-of-time:} 2023H1 + 2023H2 (two cohorts, 50\,000 loans), the
+worst-performing cohorts in the panel, used as a stress test.
+\end{itemize}
+
+\section{Methodology}
+
+\subsection{Weight of Evidence binning}
+
+Each feature is transformed from raw value to a WoE score that
+captures its monotonic relationship with default. For a bin $b$ of
+feature $X$, WoE is defined as
+$$\mathrm{WoE}_b = \log\!\frac{\Pr(X \in b \mid y = 0)}{\Pr(X \in b \mid y = 1)}$$
+positive when non-defaulters are over-represented in the bin, negative
+otherwise.
+
+Numeric features are binned into deciles. Low-cardinality numeric
+features (counts of bankruptcies, public records, missingness flags)
+use their distinct values directly as bins. Categorical features
+(home ownership, loan purpose) are encoded with WoE per category.
+All encoders are fit on training data only and applied unchanged to
+validation and OOT cohorts.
+
+\subsection{Information Value and feature selection}
+
+For each feature, the Information Value summarizes how much the
+binned distribution of $X$ differs between defaulters and
+non-defaulters:
+$$\mathrm{IV} = \sum_b \big( \Pr(X \in b \mid y = 0) - \Pr(X \in b \mid y = 1) \big) \cdot \mathrm{WoE}_b$$
+
+The industry convention is to drop features with IV below 0.02, on
+the basis that anything weaker is essentially unpredictive and only
+adds noise to the regression.
+
+\begin{table}[H]
+\centering
+\begin{tabular}{l r}
+\toprule
+\textbf{Feature} & \textbf{IV} \\
+\midrule
+bureau\_score                          & 0.601 \\
+interest\_rate\_pct                    & 0.512 \\
+utilization\_pct                       & 0.476 \\
+worst\_status\_24m                     & 0.331 \\
+delinquencies\_2y                      & 0.283 \\
+months\_since\_last\_delinquency\_missing & 0.263 \\
+months\_since\_last\_delinquency       & 0.140 \\
+prior\_bankruptcies                    & 0.105 \\
+inquiries\_6m                          & 0.097 \\
+public\_records                        & 0.026 \\
+\midrule
+\textit{Below 0.02 threshold (dropped)} & \textit{16 features} \\
+\bottomrule
+\end{tabular}
+\caption{Information Value per feature, kept set above the 0.02 threshold. Bureau-derived attributes dominate as expected.}
+\end{table}
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.85\textwidth]{02_information_values.png}
+\caption{Information Value ranking. Bars above the red threshold are kept; below are dropped.}
+\end{figure}
+
+The final model uses ten features. All are bureau-derived or strongly
+bureau-influenced (interest rate, set by the lender based on the
+applicant's risk profile). Application-only attributes (DTI,
+employment length, income, age) all fall below the IV threshold once
+the bureau-based features are in.
+
+\subsection{Logistic regression on WoE features}
+
+The model is L2-regularized logistic regression with $C = 1.0$:
+$$\log\!\frac{p_i}{1 - p_i} = \beta_0 + \sum_j \beta_j \cdot \mathrm{WoE}_j(x_{ij})$$
+fitted by maximum likelihood on the training cohort.
+
+\subsection{Calibration to long-run-average PD}
+
+The raw logistic output is rank-discriminative but the level can drift
+when training and prediction populations differ. The standard IRB fix
+is an additive intercept correction:
+$$\widehat{\mathrm{PD}}_i = \frac{1}{1 + \exp\!\big( -(\mathrm{logit}(\widehat p_i^{\text{raw}}) + c) \big)}$$
+where $c$ is chosen so that the mean of $\widehat{\mathrm{PD}}$ on the
+training set equals the realized default rate across the six training
+cohorts. Because the training panel spans pre-COVID, COVID, and
+recovery, the resulting calibration target approximates a
+through-the-cycle average rather than any single vintage.
+
+\subsection{Master rating scale}
+
+PDs are mapped to a nine-grade scale (A1 to C3), constructed as
+piecewise cutpoints in PD space. The grades are the unit of currency
+for the rest of the bank: loan pricing, capital calculation, and IFRS
+9 staging all run on grades, not on raw PD scores. The grade
+boundaries are 0.5\%, 1\%, 2.5\%, 5\%, 8\%, 12\%, 18\%, 28\%, and
+100\%.
+
+\section{Results}
+
+\subsection{Discrimination}
+
+\begin{table}[H]
+\centering
+\begin{tabular}{l r r r r r}
+\toprule
+\textbf{Cohort} & \textbf{AUC} & \textbf{Gini} & \textbf{KS} & \textbf{Log-loss} & \textbf{Brier} \\
+\midrule
+TRAIN (150k, 2019--2021) & 0.7778 & 0.5557 & 0.4126 & 0.2915 & 0.0846 \\
+VAL 2022 (50k)            & 0.7699 & 0.5397 & 0.4038 & 0.3210 & 0.0951 \\
+OOT 2023 (50k)            & 0.7693 & 0.5386 & 0.3991 & 0.3492 & 0.1048 \\
+\bottomrule
+\end{tabular}
+\caption{Headline metrics across the chronological split. Gini sits in the upper half of the typical retail PD range (0.40--0.60 acceptable, 0.55+ strong) and drops only 1.7 Gini-points from train to out-of-time despite spanning a full macroeconomic cycle.}
+\end{table}
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.78\textwidth]{01_roc_three_splits.png}
+\caption{ROC curves across train, validation, and out-of-time. The three curves are nearly superimposable.}
+\end{figure}
+
+\subsection{Calibration per rating grade}
+
+\begin{table}[H]
+\centering
+\footnotesize
+\begin{tabular}{l r r r r}
+\toprule
+\textbf{Grade} & \textbf{N (OOT)} & \textbf{Pred PD} & \textbf{Observed DR} & \textbf{Share} \\
+\midrule
+A2  & 1\,314 & 0.86\%  & 0.91\%  & 2.6\% \\
+A3  & 7\,136 & 1.77\%  & 2.59\%  & 14.3\% \\
+B1  & 10\,675 & 3.68\%  & 5.56\%  & 21.4\% \\
+B2  & 8\,413 & 6.37\%  & 9.14\%  & 16.8\% \\
+B3  & 7\,202 & 9.84\%  & 12.77\% & 14.4\% \\
+C1  & 6\,160 & 14.75\% & 18.86\% & 12.3\% \\
+C2  & 5\,041 & 22.28\% & 28.47\% & 10.1\% \\
+C3  & 4\,059 & 39.95\% & 47.50\% & 8.1\% \\
+\bottomrule
+\end{tabular}
+\caption{Predicted vs observed default rate per grade on the 2023 out-of-time cohort. The TTC-calibrated model under-predicts realized rates in the B and C grades by 2--7 percentage points, reflecting the macroeconomic stress that a TTC scorecard is not designed to track point-in-time.}
+\end{table}
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.92\textwidth]{04_grade_calibration_oot.png}
+\caption{Predicted PD vs observed default rate per grade on the 2023 out-of-time cohort.}
+\end{figure}
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.78\textwidth]{03_calibration_oot.png}
+\caption{Calibration curve on OOT, 10 quantile bins. The systematic upward shift across the range is the expected behaviour of a TTC scorecard during a downturn.}
+\end{figure}
+
+\subsection{Population stability}
+
+The Population Stability Index measures whether the grade distribution
+on a new cohort matches the training distribution:
+$$\mathrm{PSI} = \sum_g (\pi_g^{\text{new}} - \pi_g^{\text{train}}) \cdot \log\!\frac{\pi_g^{\text{new}}}{\pi_g^{\text{train}}}$$
+
+\begin{table}[H]
+\centering
+\begin{tabular}{l r}
+\toprule
+\textbf{Comparison} & \textbf{PSI} \\
+\midrule
+TRAIN vs VAL (2022)  & 0.0003 \\
+TRAIN vs OOT (2023)  & 0.0001 \\
+\bottomrule
+\end{tabular}
+\caption{PSI well below the conventional thresholds (0.10 stable, 0.25 material shift). The grade distribution barely moves across the five-year panel.}
+\end{table}
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.92\textwidth]{05_population_stability.png}
+\caption{Share of population in each grade across train, validation, and OOT cohorts.}
+\end{figure}
+
+\section{Regulatory framework}
+
+\subsection{Basel II and III}
+
+Basel II (2004) introduced the Internal Ratings-Based (IRB) approach,
+which lets banks use their own PD, LGD, and EAD estimates to compute
+regulatory capital. The IRB capital formula for a single retail
+exposure depends most heavily on PD: a higher PD drives a higher risk
+weight, which drives a higher required capital reserve. Basel III
+(2010 onwards) tightened the capital requirements, added the leverage
+ratio and liquidity coverage ratio, and constrained how much banks
+could rely on internal models versus standardised risk weights.
+
+\subsection{IFRS 9}
+
+IFRS 9, effective from January 2018, replaced the incurred-loss model
+of IAS 39 with the Expected Credit Loss (ECL) framework for loan
+provisioning. Every loan is assigned to one of three stages:
+
+\begin{itemize}
+\item \textbf{Stage 1}: performing. ECL provision equals the expected
+loss over the next 12 months.
+\item \textbf{Stage 2}: significant increase in credit risk since
+origination. ECL provision equals the expected loss over the loan's
+remaining life.
+\item \textbf{Stage 3}: credit-impaired (default). Lifetime ECL on a
+defaulted basis.
+\end{itemize}
+
+The PD that drives staging and ECL under IFRS 9 differs from Basel in
+two ways. IFRS 9 uses a point-in-time (PIT) PD conditional on current
+macroeconomic conditions, and requires lifetime PD for Stage 2 and 3.
+
+\section{Compliance checklist}
+
+The tables below list the specific Basel and IFRS 9 requirements
+relevant to a retail PD scorecard, marked against what is present in
+this prototype and what is not.
+
+\subsection{Basel II/III requirements}
+
+\begin{table}[H]
+\centering
+\footnotesize
+\begin{tabular}{l c l}
+\toprule
+\textbf{Requirement} & \textbf{Status} & \textbf{In this project} \\
+\midrule
+Minimum 5 years of observation data & \textcolor{goodgreen}{\textbf{Met}} & 2019--2023, ten half-year vintages \\
+Master scale, $\geq$ 7 non-default grades & \textcolor{goodgreen}{\textbf{Met}} & 9-grade A1--C3 scale \\
+Through-the-cycle PD calibration & \textcolor{goodgreen}{\textbf{Met}} & Intercept-shifted to long-run-average \\
+Chronological out-of-time validation & \textcolor{goodgreen}{\textbf{Met}} & 2023 cohorts held out for backtest \\
+Discrimination metrics reported & \textcolor{goodgreen}{\textbf{Met}} & Gini, KS, AUC per cohort \\
+Stability monitoring on rating output & \textcolor{goodgreen}{\textbf{Met}} & PSI on grade distribution \\
+Reasonable sample per grade & \textcolor{goodgreen}{\textbf{Met}} & Thousands of defaults per grade \\
+\midrule
+12-month PD horizon as regulatory anchor & \textcolor{missingred}{\textbf{Partial}} & 18-month performance window used \\
+\midrule
+Defined default trigger (90+ DPD or UTP) & \textcolor{missingred}{\textbf{Not in scope}} & Binary flag, no DPD/UTP construct \\
+Override capability & \textcolor{missingred}{\textbf{Not in scope}} & No manual override layer built \\
+Independent validation & \textcolor{missingred}{\textbf{Not in scope}} & Prototype, no second-line review \\
+Use test (real lending decisions) & \textcolor{missingred}{\textbf{Not in scope}} & Demonstration only \\
+Model risk management framework & \textcolor{missingred}{\textbf{Not in scope}} & No MRM infrastructure \\
+Supervisory approval (Finansinspektionen) & \textcolor{missingred}{\textbf{Not in scope}} & Portfolio project, not submitted \\
+\bottomrule
+\end{tabular}
+\caption{Basel II/III compliance checklist. The structural and quantitative requirements relevant to model development are met. The governance and process requirements that a production deployment requires are out of scope for a portfolio prototype.}
+\end{table}
+
+\subsection{IFRS 9 requirements}
+
+\begin{table}[H]
+\centering
+\footnotesize
+\begin{tabular}{l c l}
+\toprule
+\textbf{Requirement} & \textbf{Status} & \textbf{In this project} \\
+\midrule
+Calibrated PD foundation suitable for ECL & \textcolor{goodgreen}{\textbf{Met}} & TTC-calibrated PD at grade level \\
+Origination-grade infrastructure for SICR & \textcolor{goodgreen}{\textbf{Met}} & Master scale enables grade comparison \\
+\midrule
+Stage 1/2/3 classification implementation & \textcolor{missingred}{\textbf{Not built}} & Infrastructure present, logic not coded \\
+SICR triggers (PD ratio, days past due) & \textcolor{missingred}{\textbf{Not built}} & No SICR rule implemented \\
+Lifetime PD projection & \textcolor{missingred}{\textbf{Not built}} & Single-horizon PD only \\
+PIT PD via macro overlay & \textcolor{missingred}{\textbf{Not built}} & Only TTC version computed \\
+Multi-scenario weighting (base/up/down) & \textcolor{missingred}{\textbf{Not built}} & Single deterministic scenario \\
+Discounted lifetime ECL calculation & \textcolor{missingred}{\textbf{Not built}} & ECL formula not applied \\
+LGD model & \textcolor{missingred}{\textbf{Not built}} & Out of scope for PD project \\
+EAD model & \textcolor{missingred}{\textbf{Not built}} & Out of scope for PD project \\
+\bottomrule
+\end{tabular}
+\caption{IFRS 9 compliance checklist. The PD model provides the foundation but the ECL engine, staging logic, macro overlay, and LGD/EAD models that complete IFRS 9 compliance are scheduled as separate projects in the portfolio.}
+\end{table}
+
+\subsection{Summary}
+
+This prototype covers the methodological core of a Basel IRB PD
+scorecard. The gaps are the governance and infrastructure layers that
+sit above the model (independent validation, MRM framework, use test,
+supervisory approval) and the IFRS 9 ECL engine that sits below it
+(staging, lifetime PD, macro overlay, LGD, EAD). Both gaps are
+expected for a portfolio project rather than a production deployment.
+
+\section{What the model shows}
+
+The scorecard discriminates reasonably (Gini $\approx 0.54$ on OOT),
+is tightly calibrated per grade on the training data, and shows the
+expected mild under-prediction during the 2023 stress vintage. PSI
+confirms that the grade distribution is stable across the full
+five-year panel.
+
+The headline pattern is the OOT under-prediction. Observed default
+rates exceed predicted by 2--7 percentage points in the higher-risk
+grades. This is the textbook signature of a TTC-calibrated scorecard
+during a downturn: the model is anchored to a long-run-average that
+includes the benign pre-COVID years, and the 2023 cohort runs above
+that average. In production this would be absorbed by a PIT macro
+overlay for IFRS 9 ECL while keeping the TTC version for Basel
+regulatory capital.
+
+\section{Limitations}
+
+\begin{itemize}
+\item Synthetic data. The bureau attributes are simulated, not from a
+real credit bureau. The IV pattern is plausible but not validated
+against external benchmarks.
+\item No defined default trigger. The target is a binary outcome flag
+without 90+ days past due or unlikely-to-pay construction.
+\item Single performance window. The 18-month outcome horizon is
+fixed across vintages.
+\item No monotone constraints on WoE. Some features end up with
+non-monotone WoE curves, which is statistically fine but a model
+governance committee would typically require monotonicity.
+\item No fairness audit. A production model would test for disparate
+impact across protected attributes.
+\item No champion-challenger framework. A production deployment would
+shadow the new model against the existing scorecard for 3--6 months
+before any traffic switch.
+\item Governance and infrastructure layers (independent validation,
+MRM framework, use test, supervisory approval) are out of scope.
+\end{itemize}
+
+\section{References}
+
+\begin{itemize}
+\item Basel Committee on Banking Supervision, \emph{International
+Convergence of Capital Measurement and Capital Standards} (Basel II/III).
+\item European Banking Authority, \emph{Guidelines on PD Estimation,
+LGD Estimation and the Treatment of Defaulted Exposures} (EBA/GL/2017/16).
+\item Siddiqi, \emph{Credit Risk Scorecards: Developing and Implementing
+Intelligent Credit Scoring} (Wiley, 2012). Standard industry reference
+for the WoE/IV scorecard workflow.
+\item Anderson, \emph{The Credit Scoring Toolkit} (Oxford, 2007).
+\item IFRS 9, \emph{Financial Instruments}. The accounting standard
+that drives the staging engine and lifetime ECL.
+\end{itemize}
+
+\end{document}
