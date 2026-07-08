@@ -1,0 +1,15 @@
+,0
+n_loans,50000.0
+total_ead_eur,3780581667.03
+ecl_baseline_eur,77502607.44765317
+ecl_adverse_eur,132483198.82464388
+ecl_severe_eur,217929404.14619443
+ecl_weighted_eur,108039464.53060451
+coverage_ratio_weighted,0.028577471417375728
+n_stage_1,38140.0
+n_stage_2,11483.0
+n_stage_3,377.0
+adverse_uplift_pct,70.94031180063936
+severe_uplift_pct,181.18977067112013
+avg_migration_uplift_eur,1545.8203238880803
+total_migration_potential_eur,58957587.153091386

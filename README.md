@@ -21,6 +21,26 @@ combined Gini + Brier criterion, WoE encoding, and comparison across
 logistic regression, XGBoost, and LightGBM. Out-of-time Gini around
 0.89 on the case dataset. Case data not included.
 
+**[03-lgd-model](./03-lgd-model)**
+Loss Given Default scorecard on ~15,000 defaulted facilities across
+mortgage, auto, personal secured, and unsecured collateral. Fractional
+logit, OLS, and XGBoost compared. OOT MAE 0.100, RMSE 0.126, R² 0.72.
+Downturn LGD uplift via P90 quantile per collateral bucket.
+
+**[04-ead-model](./04-ead-model)**
+Exposure at Default via CCF regression for ~20,000 revolving retail
+facilities (credit cards, overdrafts, lines of credit). Fractional
+logit chosen: CCF R² 0.31, derived EAD R² 0.98 (mean EUR
+9,325 predicted vs 9,277 realised).
+
+**[05-ecl-pipeline](./05-ecl-pipeline)**
+End-to-end IFRS 9 Expected Credit Loss pipeline combining PD × LGD ×
+EAD across three probability-weighted macro scenarios (baseline,
+adverse, severe adverse) on a 50,000-loan performing portfolio with
+3.78 billion EUR EAD. Stage classification, lifetime PD term
+structure, discounting. Weighted provision 108m EUR (2.86%
+coverage), stage-migration cliff +1,546 EUR per loan.
+
 ## Stack
 
 - Python for pipelines and post-processing

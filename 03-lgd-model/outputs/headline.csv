@@ -1,0 +1,10 @@
+,0
+n_train,11361
+n_oot,3639
+mean_true_train_lgd,0.42863667194789196
+mean_true_oot_lgd,0.4393165979664743
+chosen_model,FractionalLogit
+oot_mae,0.10012509733710996
+oot_rmse,0.12618026814131839
+oot_r2,0.7236189595280347
+max_psi,17.63063472420993

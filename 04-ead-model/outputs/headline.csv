@@ -1,0 +1,11 @@
+,0
+n_train,15203
+n_oot,4797
+mean_ccf_train,0.6567989179767151
+mean_ccf_oot,0.6442553929539295
+chosen_model,FractionalLogit
+ccf_oot_mae,0.12729815505330663
+ccf_oot_rmse,0.15716617683109538
+ccf_oot_r2,0.3100938032372599
+ead_oot_r2_frac,0.9809361464118138
+max_psi,17.267296859664008
