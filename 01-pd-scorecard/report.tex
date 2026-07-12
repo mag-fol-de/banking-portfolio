@@ -10,7 +10,6 @@
 \usepackage{tikz}
 \usetikzlibrary{calc}
 \usepackage{everypage}
-\usepackage{background}
 \usepackage{amsmath}
 \usepackage{amssymb}
 \usepackage{booktabs}
@@ -25,14 +24,12 @@
 \definecolor{goodgreen}{RGB}{30,120,60}
 \definecolor{missingred}{RGB}{180,40,40}
 
-\backgroundsetup{
-  scale=1, color=bordercolor, opacity=1, angle=0,
-  position=current page.center,
-  contents={\begin{tikzpicture}[remember picture, overlay]
+\AddEverypageHook{%
+  \begin{tikzpicture}[remember picture, overlay]
     \draw[line width=4pt, color=bordercolor]
       ($(current page.south west) + (1cm,1cm)$) rectangle
       ($(current page.north east) - (1cm,1cm)$);
-  \end{tikzpicture}}
+  \end{tikzpicture}%
 }
 
 \begin{document}
