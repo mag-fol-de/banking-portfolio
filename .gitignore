@@ -43,3 +43,8 @@ dbt_project/logs/
 
 # uv artefacts
 .uv/
+
+# Local-only projects (not shared on GitHub)
+03-lgd-model/
+04-ead-model/
+05-ecl-pipeline/
